@@ -1,8 +1,29 @@
 import { WebSocketServer } from 'ws';
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
+import { readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PORT = process.env.PORT || 3001;
 const MAX_CREW = 6;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DIST_DIR = path.resolve(__dirname, '../dist');
+
+const MIME_TYPES = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2'
+};
 
 // Spawn points spread along the corridor so crews don't stack up.
 const SPAWNS = [
@@ -32,8 +53,64 @@ function broadcast(shipId, msg, exceptId = null) {
   }
 }
 
-const wss = new WebSocketServer({ port: PORT });
-console.log(`space-hub server listening on :${PORT}`);
+async function sendFile(res, filePath) {
+  const data = await readFile(filePath);
+  res.writeHead(200, {
+    'Content-Type': MIME_TYPES[path.extname(filePath)] || 'application/octet-stream'
+  });
+  res.end(data);
+}
+
+async function serveStatic(req, res) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405);
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  const pathname = decodeURIComponent(url.pathname);
+  const requestPath = pathname === '/' ? '/index.html' : pathname;
+  let filePath = path.resolve(DIST_DIR, `.${requestPath}`);
+
+  if (!filePath.startsWith(`${DIST_DIR}${path.sep}`) && filePath !== DIST_DIR) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+
+  try {
+    const fileStat = await stat(filePath);
+    if (fileStat.isDirectory()) filePath = path.join(filePath, 'index.html');
+    await sendFile(res, filePath);
+  } catch {
+    if (path.extname(requestPath)) {
+      res.writeHead(404);
+      res.end('Not Found');
+      return;
+    }
+    try {
+      await sendFile(res, path.join(DIST_DIR, 'index.html'));
+    } catch {
+      res.writeHead(503);
+      res.end('Build output not found. Run `npm run build` before starting the server.');
+    }
+  }
+}
+
+const server = createServer((req, res) => {
+  serveStatic(req, res).catch((err) => {
+    console.error(err);
+    res.writeHead(500);
+    res.end('Internal Server Error');
+  });
+});
+
+const wss = new WebSocketServer({ server });
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`space-hub server listening on :${PORT}`);
+});
 
 wss.on('connection', (ws) => {
   let playerId = null;

@@ -66,6 +66,24 @@ This starts both the WebSocket server (`:3001`) and the Vite dev server
 Open the page in more tabs (or from other machines on the LAN — Vite listens
 on all interfaces) to fill the crew; the 7th player gets a fresh ship.
 
+## Deploy on Coolify with Nixpacks
+
+Use the Nixpacks build pack. The included `nixpacks.toml` runs:
+
+```bash
+npm ci
+npm run build
+npm run start
+```
+
+Coolify should expose the generated application port from `PORT`. The Node
+server serves the Vite `dist/` build and the WebSocket multiplayer relay from
+the same origin, so no separate WebSocket service is needed.
+
+For normal Coolify HTTPS deployments, leave `VITE_WS_URL` unset. Set
+`VITE_WS_URL` only if you intentionally host the WebSocket server on a separate
+public URL.
+
 ## Architecture
 
 - `src/ship.js` — procedural ship interior: walls with door/window gaps,

@@ -125,7 +125,10 @@ export class Net {
 
   connect(name) {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.hostname}:3001`);
+    const defaultUrl = import.meta.env.DEV
+      ? `${proto}://${location.hostname}:3001`
+      : `${proto}://${location.host}`;
+    const ws = new WebSocket(import.meta.env.VITE_WS_URL || defaultUrl);
     this.ws = ws;
 
     ws.onopen = () => {
