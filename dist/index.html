@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Space Hub</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000;
+      font-family: 'Courier New', ui-monospace, monospace; }
+    #app { width: 100%; height: 100%; }
+    canvas { display: block; }
+
+    /* ---------- boarding overlay ---------- */
+    #overlay {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background:
+        radial-gradient(ellipse at 30% 20%, rgba(40,20,80,.35), transparent 60%),
+        radial-gradient(ellipse at 75% 80%, rgba(10,60,80,.3), transparent 55%),
+        radial-gradient(ellipse at center, rgba(8,14,28,.95), rgba(0,0,4,.99));
+      color: #cfe3ff; text-align: center; cursor: pointer;
+    }
+    #overlay::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(0deg, rgba(120,180,255,.028) 0 1px, transparent 1px 3px);
+    }
+    #overlay .kicker { font-size: 12px; letter-spacing: 6px; color: #5c86b8; margin-bottom: 12px; }
+    #overlay h1 { font-size: 46px; letter-spacing: 14px; font-weight: 700; color: #8fd8ff;
+      text-shadow: 0 0 30px #2a7fff, 0 0 4px #9fe4ff; }
+    #overlay p { margin-top: 18px; font-size: 14px; opacity: .8; max-width: 470px; line-height: 1.7; }
+    #overlay b { color: #9fe4ff; }
+    #overlay .boarding {
+      margin-top: 36px; padding: 13px 46px; border: 1px solid #2f76c8; border-radius: 2px;
+      font-size: 16px; letter-spacing: 4px; color: #bfe6ff; background: rgba(30,80,160,.14);
+      clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100% { box-shadow: 0 0 8px rgba(70,150,255,.25); } 50% { box-shadow: 0 0 26px rgba(70,150,255,.65); } }
+    #overlay .hint { margin-top: 24px; font-size: 11px; letter-spacing: 1px; opacity: .5; }
+
+    /* ---------- HUD ---------- */
+    #hud {
+      position: fixed; left: 0; right: 0; top: 0; z-index: 5; pointer-events: none;
+      display: none; justify-content: space-between; align-items: flex-start; padding: 16px 20px;
+      color: #9fd0ff; font-size: 12px; letter-spacing: 1.5px;
+      text-shadow: 0 0 8px rgba(30,120,255,.7);
+    }
+    #hud .panel {
+      position: relative;
+      background: rgba(6,16,32,.6); border: 1px solid rgba(80,150,255,.28);
+      padding: 10px 16px; backdrop-filter: blur(3px);
+      clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    }
+    #hud .label { font-size: 10px; color: #55779f; letter-spacing: 2px; }
+    #room-name { font-size: 19px; color: #dff0ff; margin-top: 2px; }
+    #vessel-id { color: #7fb8e8; }
+    #hud .row { margin-top: 3px; }
+    #hud .val { color: #cfe9ff; }
+    #mic-state.muted { color: #ff9a7a; }
+
+    #crosshair {
+      position: fixed; left: 50%; top: 50%; z-index: 5; display: none;
+      width: 14px; height: 14px; margin: -7px 0 0 -7px; pointer-events: none;
+    }
+    #crosshair::before {
+      content: ''; position: absolute; inset: 0; border-radius: 50%;
+      border: 1px solid rgba(160,210,255,.55);
+    }
+    #crosshair::after {
+      content: ''; position: absolute; left: 50%; top: 50%; width: 2px; height: 2px;
+      margin: -1px 0 0 -1px; border-radius: 50%; background: rgba(190,230,255,.95);
+    }
+
+    #vignette {
+      position: fixed; inset: 0; z-index: 4; pointer-events: none; display: none;
+      background: radial-gradient(ellipse at center, transparent 58%, rgba(2,4,10,.55) 100%);
+    }
+    #scanlines {
+      position: fixed; inset: 0; z-index: 4; pointer-events: none; display: none; opacity: .5;
+      background: repeating-linear-gradient(0deg, rgba(140,190,255,.016) 0 1px, transparent 1px 4px);
+    }
+
+    #prompt {
+      position: fixed; left: 50%; top: 58%; transform: translateX(-50%); z-index: 5;
+      display: none; pointer-events: none; color: #cfe9ff; font-size: 14px; letter-spacing: 2px;
+      background: rgba(6,18,36,.72); border: 1px solid rgba(90,170,255,.4); padding: 8px 20px;
+      text-shadow: 0 0 10px rgba(60,160,255,.9);
+      clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    }
+    #controls-hint {
+      position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 5;
+      display: none; pointer-events: none; color: #6f95bf; font-size: 11px; letter-spacing: 2px;
+      background: rgba(6,16,32,.5); border: 1px solid rgba(80,150,255,.18); padding: 7px 18px;
+      transition: opacity 1.5s; text-shadow: 0 0 8px rgba(30,120,255,.6);
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index-CW6UHqOq.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="hud">
+    <div class="panel">
+      <div class="label">LOCATION // <span id="vessel-id">—</span></div>
+      <div id="room-name">—</div>
+    </div>
+    <div class="panel">
+      <div class="row">CREW ONLINE <span class="val"><span id="crew-count">1</span> / 6</span></div>
+      <div class="row">MIC [M] <span class="val" id="mic-state">…</span></div>
+      <div class="row">UPLINK <span class="val" id="net-state">connecting…</span></div>
+    </div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="prompt"></div>
+  <div id="vignette"></div>
+  <div id="scanlines"></div>
+  <div id="controls-hint">WASD MOVE &nbsp;·&nbsp; MOUSE LOOK &nbsp;·&nbsp; E / CLICK INTERACT &nbsp;·&nbsp; M MUTE &nbsp;·&nbsp; ESC RELEASE CURSOR</div>
+
+  <div id="overlay">
+    <div class="kicker">INTERSTELLAR CREW TRANSFER PROTOCOL</div>
+    <h1>SPACE HUB</h1>
+    <p>You are being assigned to a vessel with up to <b>five other crew members</b>.
+       Walk the ship with <b>WASD</b>, look with the mouse. Doors open as you approach.
+       Voice carries by <b>proximity</b> — step close to someone to talk.
+       Press <b>E</b> on consoles, levers and switches; kick the ball, shove the crate.</p>
+    <div class="boarding">CLICK TO BOARD</div>
+    <div class="hint">MICROPHONE REQUESTED FOR PROXIMITY COMMS · M TO MUTE · ESC RELEASES THE CURSOR</div>
+  </div>
+
+</body>
+</html>
